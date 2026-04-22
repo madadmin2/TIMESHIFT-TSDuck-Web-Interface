@@ -45,12 +45,15 @@ requirements.txt - Python dependencies.
 
 This project is licensed under the MIT License.
 
-☕ Support
-
 Created by Iliya P. © 2026.
 
+☕ Support
 If this project helped you, consider supporting the work:
 
-Revolut: revolut.me/YOUR_USER
+* [💸 Support via Revolut](https://revolut.me/iliyapereshki)
+* [🅿️ Support via PayPal](https://paypal.me/iliapereshki)
 
-PayPal: paypal.me/YOUR_USER
+#### ₿ Crypto Addresses:
+**USDT (TRC20):** `TP6dBhKT9w6n625mVEtaaRjYHHKMWG1DGs`
+ 
+**BTC:** `15JVVYuLdbcL3zgumvFXSxCYReprQdm9YQ`
