@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>TIMESHIFT</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>[v-cloak] { display: none; }</style>
+</head>
+<body class="bg-[#0f172a] text-slate-200 font-sans p-4">
+    <div id="app" v-cloak>
+        <div v-if="!isLogged" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-50">
+            <div class="bg-slate-800 p-8 rounded-xl border border-slate-700 w-80 shadow-2xl text-center">
+                <h2 class="text-2xl font-black text-blue-500 mb-6 uppercase italic">TIMESHIFT Login</h2>
+                <input v-model="loginForm.user" placeholder="Username" class="w-full bg-slate-900 p-3 rounded mb-3 border border-slate-700 outline-none focus:ring-2 ring-blue-500 text-sm">
+                <input v-model="loginForm.pass" type="password" placeholder="Password" class="w-full bg-slate-900 p-3 rounded mb-6 border border-slate-700 outline-none focus:ring-2 ring-blue-500 text-sm text-white">
+                <button @click="doLogin" class="w-full bg-blue-600 p-3 rounded font-bold hover:bg-blue-500 transition">LOGIN</button>
+            </div>
+        </div>
+
+        <div v-else class="max-w-7xl mx-auto">
+            <header class="flex justify-between items-center mb-8 border-b border-slate-800 pb-4">
+                <h1 class="text-2xl font-black text-blue-500 italic uppercase">TIMESHIFT</h1>
+                
+                <div class="flex items-center gap-6">
+                    <div class="flex items-center gap-4">
+                        <button @click="logout" class="bg-red-900/30 text-red-500 px-3 py-1 rounded text-[10px] font-bold border border-red-900/50 hover:bg-red-600 hover:text-white transition">LOGOUT</button>
+                    </div>
+                </div>
+            </header>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                <div v-for="iface in filteredInterfaces" :key="iface.name" class="bg-slate-800 p-4 rounded-lg border border-slate-700">
+                    <div class="text-[10px] font-bold text-slate-500 uppercase">{{iface.name}}</div>
+                    <div class="text-sm font-mono text-blue-300">{{iface.ip}}</div>
+                    <div class="flex justify-between mt-3 text-[11px] font-bold font-mono">
+                        <span class="text-green-500">IN: {{iface.in_mbps}}M</span>
+                        <span class="text-blue-500">OUT: {{iface.out_mbps}}M</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                <div class="lg:col-span-4 bg-slate-800 p-6 rounded-xl border border-slate-700 h-fit sticky top-4">
+                    <h3 class="text-sm font-black mb-6 text-blue-400 uppercase tracking-widest">{{ isEditing ? 'Edit' : 'Configure' }}</h3>
+                    <div class="space-y-4 text-white">
+                        <input v-model="form.name" placeholder="Channel Name" class="w-full bg-slate-900 border border-slate-700 p-3 rounded text-sm outline-none focus:border-blue-500">
+                        <div class="grid grid-cols-2 gap-2">
+                            <input v-model="form.input" placeholder="Input (239.x.x.x:5000)" class="bg-slate-900 border border-slate-700 p-3 rounded text-[10px] font-mono outline-none focus:border-blue-500">
+                            <select v-model="form.in_iface" class="bg-slate-700 border border-slate-700 p-2 rounded text-xs outline-none text-white">
+                                <option value="">Input from...</option>
+                                <option v-for="i in filteredInterfaces" :value="i.name">{{i.name}}</option>
+                            </select>
+                        </div>
+                        <div class="bg-slate-900 p-4 rounded border border-slate-700">
+                            <label class="text-[9px] font-bold text-slate-500 block mb-2 uppercase text-white">Delay (seconds)</label>
+                            <div class="flex items-center gap-4">
+                                <input type="number" v-model="form.delay" class="bg-transparent text-3xl font-black text-blue-500 w-24 outline-none">
+                                <div class="flex-1 text-right">
+                                    <input type="checkbox" v-model="form.use_disk" id="disk_check">
+                                    <label for="disk_check" class="text-orange-500 font-bold text-[10px] ml-1 cursor-pointer uppercase">DISK BUFFER</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-2 gap-2 border-t border-slate-700 pt-4">
+                            <input v-model="form.output" placeholder="Output (239.x.x.x:6000)" class="bg-slate-900 border border-slate-700 p-3 rounded text-[10px] font-mono outline-none focus:border-blue-500">
+                            <select v-model="form.out_iface" class="bg-slate-700 border border-slate-700 p-2 rounded text-xs outline-none text-white">
+                                <option value="">Output via...</option>
+                                <option v-for="i in filteredInterfaces" :value="i.name">{{i.name}}</option>
+                            </select>
+                        </div>
+                        <button @click="startStream" class="w-full bg-blue-600 hover:bg-blue-500 p-4 rounded-lg font-black uppercase text-xs tracking-widest transition">
+                            {{ isEditing ? 'Save and Start' : 'Start Stream' }}
+                        </button>
+                        <button v-if="isEditing" @click="cancelEdit" class="w-full bg-slate-700 p-2 rounded text-[10px] font-bold">CANCEL</button>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-8 bg-slate-800 p-6 rounded-xl border border-slate-700 shadow-xl overflow-x-auto">
+                    <table class="w-full text-left">
+                        <thead class="text-slate-500 text-[10px] font-black uppercase border-b border-slate-700">
+                            <tr>
+                                <th class="pb-4">Status / Channel</th>
+                                <th class="pb-4">Routing</th>
+                                <th class="pb-4 text-center">Buffer</th>
+                                <th class="pb-4 text-right">Management</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-700/30">
+                            <tr v-for="ch in channels" :key="ch.name" class="hover:bg-slate-900/40 transition">
+                                <td class="py-4">
+                                    <div class="font-bold text-sm flex items-center">
+                                        <div :class="ch.running ? 'bg-green-500 animate-pulse shadow-[0_0_8px_#22c55e]' : 'bg-red-600'" class="w-2.5 h-2.5 rounded-full mr-3"></div>
+                                        {{ch.name}}
+                                    </div>
+                                </td>
+                                <td class="py-4 text-[10px] font-mono">
+                                    <div class="text-slate-500">IN: {{ch.input}} ({{ch.in_iface}})</div>
+                                    <div class="text-blue-400 font-bold uppercase">OUT: {{ch.output}} ({{ch.out_iface}})</div>
+                                </td>
+                                <td class="py-4 text-center">
+                                    <span class="bg-slate-900 px-3 py-1 rounded text-blue-400 font-mono text-[10px] border border-slate-700">
+                                        {{ch.delay}}s <span v-if="ch.buffer_mb" class="text-orange-500 font-bold ml-1">({{ch.buffer_mb}}MB)</span>
+                                    </span>
+                                </td>
+                                <td class="py-4 text-right">
+                                    <div class="flex justify-end gap-1">
+                                        <button @click="editStream(ch)" class="bg-slate-700 hover:bg-blue-600 p-2 rounded text-[9px] font-bold transition">EDIT</button>
+                                        <button v-if="ch.running" @click="stopStream(ch)" class="bg-orange-600/20 text-orange-500 hover:bg-orange-600 hover:text-white p-2 rounded text-[9px] font-bold border border-orange-600/40 transition">STOP</button>
+                                        <button @click="delStream(ch)" class="bg-red-600/20 text-red-500 hover:bg-red-600 hover:text-white p-2 rounded text-[9px] font-bold border border-red-600/40 transition">DELETE</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+        createApp({
+            data() {
+                return {
+                    isLogged: false,
+                    loginForm: { user: '', pass: '' },
+                    interfaces: [], channels: [], isEditing: false,
+                    sysStats: { cpu: 0, ram: 0 },
+                    form: { name: '', input: '', output: '', delay: 60, in_iface: '', out_iface: '', use_disk: true }
+                }
+            },
+            computed: {
+                filteredInterfaces() {
+                    return this.interfaces.filter(i => i.name !== 'lo');
+                }
+            },
+            methods: {
+                getHeaders() {
+                    return { 'Authorization': 'Basic ' + btoa(this.loginForm.user + ':' + this.loginForm.pass), 'Content-Type': 'application/json' };
+                },
+                async api(url, method = 'GET', body = null) {
+                    try {
+                        const res = await fetch(url, { method, headers: this.getHeaders(), body: body ? JSON.stringify(body) : null });
+                        if (res.status === 401) { this.logout(); return null; }
+                        return res.json();
+                    } catch (e) { return null; }
+                },
+                async refresh() {
+                    if (!this.isLogged) return;
+                    this.interfaces = await this.api('/api/interfaces') || [];
+                    this.channels = await this.api('/api/channels') || [];
+                    const stats = await this.api('/api/system_stats');
+                    if(stats) this.sysStats = stats;
+                },
+                doLogin() {
+                    this.isLogged = true;
+                    localStorage.setItem('pi_user', this.loginForm.user);
+                    localStorage.setItem('pi_pass', this.loginForm.pass);
+                    this.refresh();
+                },
+                logout() { 
+                    this.isLogged = false; 
+                    this.loginForm = { user: '', pass: '' };
+                    localStorage.removeItem('pi_user');
+                    localStorage.removeItem('pi_pass');
+                },
+                async startStream() {
+                    await this.api('/api/start', 'POST', this.form);
+                    this.isEditing = false;
+                    this.form = { name: '', input: '', output: '', delay: 60, in_iface: '', out_iface: '', use_disk: true };
+                    this.refresh();
+                },
+                async stopStream(ch) { await this.api('/api/stop', 'POST', ch); this.refresh(); },
+                async delStream(ch) { if(confirm("WARNING: Delete channel and buffer files?")) { await this.api('/api/delete', 'POST', ch); this.refresh(); } },
+                editStream(ch) { this.isEditing = true; this.form = {...ch}; window.scrollTo(0,0); },
+                cancelEdit() { this.isEditing = false; this.form = { name: '', input: '', output: '', delay: 60, in_iface: '', out_iface: '', use_disk: true }; }
+            },
+            mounted() {
+                const savedUser = localStorage.getItem('pi_user');
+                const savedPass = localStorage.getItem('pi_pass');
+                if(savedUser && savedPass) {
+                    this.loginForm.user = savedUser;
+                    this.loginForm.pass = savedPass;
+                    this.isLogged = true;
+                    this.refresh();
+                }
+                setInterval(this.refresh, 2000);
+            }
+        }).mount('#app');
+    </script>
+<style>
+        .ts-footer {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 30px 0;
+            margin-top: 50px;
+            background: transparent;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            clear: both;
+            position: relative;
+            left: 0;
+        }
+
+        .ts-footer p {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 13px;
+            letter-spacing: 1px;
+            margin: 0;
+            text-align: center;
+            width: 100%;
+        }
+
+        .ts-footer strong {
+            color: #3b82f6;
+            font-weight: 500;
+        }
+    </style>
+
+    <footer class="ts-footer">
+        <p>Created by <strong>Iliya P.</strong> &copy; 2026</p>
+    </footer>
+
+</body> </html>
